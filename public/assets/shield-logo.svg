@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 320" width="300" height="320">
+  <defs>
+    <linearGradient id="shieldG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1B2D4F"/>
+      <stop offset="100%" style="stop-color:#0A1628"/>
+    </linearGradient>
+    <linearGradient id="shieldInner" x1="0%" y1="0%" x2="10%" y2="100%">
+      <stop offset="0%" style="stop-color:#243D6A"/>
+      <stop offset="100%" style="stop-color:#0A1628"/>
+    </linearGradient>
+    <linearGradient id="goldG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5E090"/>
+      <stop offset="100%" style="stop-color:#C49A28"/>
+    </linearGradient>
+    <linearGradient id="avatarGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   style="stop-color:#FFF0A0"/>
+      <stop offset="30%"  style="stop-color:#F0D060"/>
+      <stop offset="70%"  style="stop-color:#C49A28"/>
+      <stop offset="100%" style="stop-color:#7A5C0A"/>
+    </linearGradient>
+    <linearGradient id="docG" x1="0%" y1="0%" x2="5%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF"/>
+      <stop offset="100%" style="stop-color:#EEF3FA"/>
+    </linearGradient>
+    <radialGradient id="sealG" cx="50%" cy="35%" r="60%">
+      <stop offset="0%"   style="stop-color:#FFFBE0"/>
+      <stop offset="45%"  style="stop-color:#E8C44A"/>
+      <stop offset="100%" style="stop-color:#A07010"/>
+    </radialGradient>
+    <radialGradient id="sealRibbonG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   style="stop-color:#F0D060"/>
+      <stop offset="100%" style="stop-color:#B08020"/>
+    </radialGradient>
+
+    <filter id="shieldShadow" x="-15%" y="-10%" width="140%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#0A1628" flood-opacity="0.5"/>
+    </filter>
+    <linearGradient id="sharpieGold" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#B8860B"/>
+      <stop offset="30%"  style="stop-color:#F0D060"/>
+      <stop offset="60%"  style="stop-color:#FFE87A"/>
+      <stop offset="100%" style="stop-color:#FFF4B0"/>
+    </linearGradient>
+    <linearGradient id="checkBlue" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#0A1628"/>
+      <stop offset="40%"  style="stop-color:#1B2D4F"/>
+      <stop offset="100%" style="stop-color:#4A72A8"/>
+    </linearGradient>
+    <filter id="sharpieGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#1B2D4F" flood-opacity="0.7"/>
+      <feDropShadow dx="1" dy="1" stdDeviation="2" flood-color="#4A72A8" flood-opacity="0.5"/>
+    </filter>
+    <filter id="docShadow" x="-8%" y="-8%" width="135%" height="130%">
+      <feDropShadow dx="3" dy="4" stdDeviation="6" flood-color="#0A1628" flood-opacity="0.32"/>
+    </filter>
+    <filter id="sealGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#E8C44A" flood-opacity="0.7"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#A07010" flood-opacity="0.4"/>
+    </filter>
+
+    <clipPath id="shieldClip">
+      <path d="M150 25 L268 62 L268 165 C268 228 214 268 150 288 C86 268 32 228 32 165 L32 62 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background removed for transparency -->
+
+  <!-- Shield base -->
+  <path d="M150 25 L268 62 L268 165 C268 228 214 268 150 288 C86 268 32 228 32 165 L32 62 Z"
+        fill="url(#shieldG)" filter="url(#shieldShadow)"/>
+
+  <!-- Shield inner face -->
+  <path d="M150 33 L258 67 L258 165 C258 222 207 260 150 278 C93 260 42 222 42 165 L42 67 Z"
+        fill="url(#shieldInner)"/>
+
+  <!-- Gold border -->
+  <path d="M150 25 L268 62 L268 165 C268 228 214 268 150 288 C86 268 32 228 32 165 L32 62 Z"
+        fill="none" stroke="url(#goldG)" stroke-width="2.8"/>
+
+  <!-- Gold top-edge highlight -->
+  <path d="M150 25 L268 62" fill="none" stroke="#FFFBE0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  <path d="M150 25 L32 62"  fill="none" stroke="#FFFBE0" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- ===== PERSON SILHOUETTE — unchanged ===== -->
+  <g clip-path="url(#shieldClip)">
+    <ellipse cx="150" cy="90" rx="38" ry="40" fill="url(#avatarGold)"/>
+    <path d="
+      M126 126
+      C126 126 108 130 90 148
+      C72 166 62 190 60 220
+      L60 310
+      L240 310
+      L240 220
+      C238 190 228 166 210 148
+      C192 130 174 126 174 126
+      C169 136 160 143 150 143
+      C140 143 131 136 126 126
+      Z
+    " fill="url(#avatarGold)"/>
+  </g>
+
+  <!-- Large shimmering gold star — solid, prominent, no wireframe -->
+  <defs>
+    <radialGradient id="starShimmer" cx="35%" cy="25%" r="65%">
+      <stop offset="0%"   style="stop-color:#FFFDE0"/>
+      <stop offset="25%"  style="stop-color:#F5E070"/>
+      <stop offset="60%"  style="stop-color:#C49A28"/>
+      <stop offset="100%" style="stop-color:#7A5800"/>
+    </radialGradient>
+    <filter id="starGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#F5E070" flood-opacity="0.8"/>
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#C49A28" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <g transform="translate(118, 181)" filter="url(#starGlow)">
+    <!-- Outer shimmer halo -->
+    <polygon points="
+      0,-38  8,-14  32,-14  13,3  20,26
+      0,13  -20,26  -13,3  -32,-14  -8,-14
+    " fill="#F5E070" opacity="0.18"/>
+
+    <!-- Main star body -->
+    <polygon points="
+      0,-34  7.5,-12  30,-12  12,2.5  18.5,24
+      0,12  -18.5,24  -12,2.5  -30,-12  -7.5,-12
+    " fill="url(#starShimmer)"/>
+
+    <!-- Dark gold edge for depth -->
+    <polygon points="
+      0,-34  7.5,-12  30,-12  12,2.5  18.5,24
+      0,12  -18.5,24  -12,2.5  -30,-12  -7.5,-12
+    " fill="none" stroke="#7A5800" stroke-width="1.2" opacity="0.5"/>
+
+    <!-- Inner engraved circle -->
+    <circle cx="0" cy="2" r="13" fill="#9A7010" opacity="0.4"/>
+    <circle cx="0" cy="2" r="11" fill="url(#starShimmer)"/>
+    <circle cx="0" cy="2" r="11" fill="none" stroke="#7A5800" stroke-width="1" opacity="0.5"/>
+
+    <!-- Center star -->
+    <polygon points="0,-6.5 1.8,-2 5.5,-2 2.8,0.5 3.8,5 0,2.8 -3.8,5 -2.8,0.5 -5.5,-2 -1.8,-2"
+             fill="#7A5800" opacity="0.55"/>
+
+    <!-- Bright highlight sheen -->
+    <polygon points="
+      0,-34  7.5,-12  0,-15
+      -7.5,-12  -30,-12  -14,-5
+    " fill="#FFFDE0" opacity="0.35"/>
+
+    <!-- Shimmer point highlights -->
+    <circle cx="0"    cy="-34" r="2.2" fill="#FFFDE0" opacity="0.9"/>
+    <circle cx="29"   cy="-12" r="1.8" fill="#FFFDE0" opacity="0.7"/>
+    <circle cx="18"   cy="24"  r="1.8" fill="#FFFDE0" opacity="0.7"/>
+    <circle cx="-18"  cy="24"  r="1.8" fill="#FFFDE0" opacity="0.7"/>
+    <circle cx="-29"  cy="-12" r="1.8" fill="#FFFDE0" opacity="0.7"/>
+  </g>
+
+  <!-- ===== DOCUMENT — drawn AFTER badge so it covers the overlapping right portion ===== -->
+  <g filter="url(#docShadow)">
+    <rect x="138" y="150" width="110" height="145" rx="6" fill="url(#docG)"/>
+    <!-- Fold corner top-right -->
+    <path d="M216 150 L248 182 L216 182 Z" fill="#E8C44A" opacity="0.85"/>
+    <path d="M216 150 L248 150 L248 182 Z" fill="#0A1628" opacity="0.07"/>
+  </g>
+
+  <!-- .ai label top-left of document in shield navy -->
+  <text x="148" y="182"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="32"
+        font-weight="700"
+        fill="#1B2D4F"
+        letter-spacing="1"
+        opacity="1">.ai</text>
+
+  <!-- Document text lines -->
+  <rect x="148" y="192" width="72" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.2"/>
+  <rect x="148" y="202" width="60" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.16"/>
+  <rect x="148" y="212" width="66" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.16"/>
+  <rect x="148" y="222" width="52" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.13"/>
+  <rect x="148" y="232" width="62" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.13"/>
+  <rect x="148" y="242" width="46" height="3.5" rx="1.75" fill="#1B2D4F" opacity="0.10"/>
+
+  <!-- Signature line -->
+  <rect x="148" y="262" width="76" height="1.5" rx="0.75" fill="#1B2D4F" opacity="0.2"/>
+  <path d="M150 259 C155 254 160 261 166 257 C172 253 176 260 182 258"
+        fill="none" stroke="#1B2D4F" stroke-width="1.2" stroke-linecap="round" opacity="0.32"/>
+
+  <!-- ===== NOTARY SEAL — bottom right corner of document, partially bleeding off ===== -->
+  <g filter="url(#sealGlow)" transform="translate(232, 268)">
+    <polygon points="
+      0,-28  2.8,-20  7.5,-25  6.5,-17  13,-19  9,-13
+      17,-12  11,-7  18,-4  12,-1  18,3   12,6
+      17,12  11,8   18,14  9,13  13,19  6.5,17
+      7.5,25  2.8,20  0,28  -2.8,20  -7.5,25  -6.5,17
+     -13,19 -9,13 -17,12 -11,7  -18,4  -12,1
+     -18,-3 -12,-6 -17,-12 -11,-8 -13,-19 -6.5,-17
+      -7.5,-25 -2.8,-20
+    " fill="url(#sealG)" opacity="0.95"/>
+    <circle cx="0" cy="0" r="20" fill="none" stroke="url(#sealRibbonG)" stroke-width="2.2"/>
+    <circle cx="0" cy="0" r="15" fill="none" stroke="url(#sealRibbonG)" stroke-width="1.2"/>
+    <circle cx="0" cy="0" r="12" fill="url(#sealG)"/>
+    <polygon points="0,-6 1.4,-1.9 5.7,-1.9 2.4,0.7 3.6,5 0,2.6 -3.6,5 -2.4,0.7 -5.7,-1.9 -1.4,-1.9"
+             fill="#A07010" opacity="0.7"/>
+    <circle cx="0"   cy="-17" r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="8"   cy="-15" r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="14"  cy="-9"  r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="17"  cy="-1"  r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="-8"  cy="-15" r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="-14" cy="-9"  r="1.1" fill="#A07010" opacity="0.6"/>
+    <circle cx="-17" cy="-1"  r="1.1" fill="#A07010" opacity="0.6"/>
+  </g>
+
+</svg>
