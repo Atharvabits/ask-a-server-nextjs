@@ -10,12 +10,11 @@ import ChatInput from "@/components/chat/ChatInput";
 import AuthModal from "@/components/auth/AuthModal";
 import Link from "next/link";
 import {
-  getSession,
   createSession,
   addMessage,
   StoredMessage,
 } from "@/lib/chat-store";
-import { getToken } from "@/lib/api";
+import { getToken, api } from "@/lib/api";
 
 export default function ChatPageWrapper() {
   return (
@@ -103,12 +102,6 @@ function ChatPage() {
 
       addMessage(currentSessionId, { role: "user", content: msg });
 
-      const currentMessages = getSession(currentSessionId)?.messages ?? [];
-      const history = currentMessages.slice(0, -1).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
       try {
         const token = getToken();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -120,7 +113,7 @@ function ChatPage() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers,
-          body: JSON.stringify({ message: msg, chat_session_id: currentSessionId, history }),
+          body: JSON.stringify({ message: msg, chat_session_id: currentSessionId }),
           signal: controller.signal,
           credentials: "include",
         });
@@ -255,25 +248,26 @@ function ChatPage() {
     [busy, sessionId]
   );
 
-  const loadSession = (id: string) => {
-    const session = getSession(id);
-    if (session) {
-      setSessionId(id);
+  const loadSession = async (id: string) => {
+    setSidebarOpen(false);
+    setSessionId(id);
+    setMessages([]);
+    setIsTyping(true);
+    try {
+      const msgs = await api<{ role: string; content: string; created_at: string }[]>(
+        `/api/chat-sessions/${id}`
+      );
       setMessages(
-        session.messages.map((m) => ({
-          role: m.role,
+        (msgs || []).map((m) => ({
+          role: m.role as "user" | "assistant",
           content: m.content,
-          directory_results: m.directory_results?.map((r) => ({
-            name: r.company_name,
-            url: r.website_url,
-            city: "",
-            state: "",
-          })),
-          featured_companies: m.featured_companies,
         }))
       );
+    } catch {
+      setMessages([]);
+    } finally {
+      setIsTyping(false);
     }
-    setSidebarOpen(false);
   };
 
   const newChat = () => {

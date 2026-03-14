@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { getSessions, deleteSession, ChatSession } from "@/lib/chat-store";
+import { api } from "@/lib/api";
 import Spinner from "@/components/ui/Spinner";
+
+interface ApiSession {
+  id: string;
+  title: string;
+  created_at: string;
+}
 
 interface ChatSidebarProps {
   activeSessionId: string | null;
@@ -24,18 +30,30 @@ export default function ChatSidebar({
   refreshKey,
 }: ChatSidebarProps) {
   const { user, logout } = useAuth();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<ApiSession[]>([]);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  useEffect(() => {
-    setSessions(getSessions());
-  }, [refreshKey]);
+  const fetchSessions = useCallback(async () => {
+    if (!user) { setSessions([]); return; }
+    try {
+      const data = await api<ApiSession[]>("/api/chat-sessions");
+      setSessions(data || []);
+    } catch {
+      setSessions([]);
+    }
+  }, [user]);
 
-  const deleteSess = (id: string, e: React.MouseEvent) => {
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions, refreshKey]);
+
+  const deleteSess = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteSession(id);
+    try {
+      await api(`/api/chat-sessions/${id}`, { method: "DELETE" });
+    } catch { /* best-effort */ }
     if (activeSessionId === id) onNewChat();
-    setSessions(getSessions());
+    setSessions((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleLogout = async () => {
