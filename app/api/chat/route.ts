@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { NextRequest } from "next/server";
+import { requireUser, requireVerified, checkRateLimit, recordRateLimit, errorResponse } from "@/lib/auth";
 import { supabase } from "@/lib/supabase-server";
-import { detectState } from "@/lib/detect-state";
+import { detectState, trackKeywords } from "@/lib/helpers";
 import { US_STATES } from "@/lib/constants";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { chatCompletionStream } from "@/lib/llm";
 
 const SYSTEM_PROMPT_BASE =
   "You are AskAServer.AI, an AI assistant specialized in service of process law. " +
@@ -16,56 +15,95 @@ const SYSTEM_PROMPT_BASE =
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { message, history } = body as {
-      message: string;
-      history?: { role: "user" | "assistant"; content: string }[];
-    };
+    const user = await requireUser(request);
+    await requireVerified(user);
 
-    if (!message || typeof message !== "string" || message.length > 4000) {
-      return NextResponse.json(
-        { error: "Message is required and must be under 4000 characters" },
-        { status: 400 }
-      );
+    if (!["admin", "owner"].includes(user.role)) {
+      await checkRateLimit(user.id);
     }
 
+    const body = await request.json();
+    const message = body.message || "";
+    const chatSessionId = body.chat_session_id || null;
+
+    if (!message || message.length > 4000) {
+      return new Response(JSON.stringify({ detail: "Message required (max 4000 chars)" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const uid = user.id;
+    let sessionId: string;
+
+    if (chatSessionId) {
+      const { data: sess } = await supabase
+        .from("chat_sessions")
+        .select("id")
+        .eq("id", chatSessionId)
+        .eq("user_id", uid);
+
+      if (sess?.length) {
+        sessionId = sess[0].id;
+      } else {
+        const { data: newSess } = await supabase
+          .from("chat_sessions")
+          .insert({ user_id: uid, title: message.slice(0, 50) })
+          .select("id");
+        sessionId = newSess![0].id;
+      }
+    } else {
+      const { data: newSess } = await supabase
+        .from("chat_sessions")
+        .insert({ user_id: uid, title: message.slice(0, 50) })
+        .select("id");
+      sessionId = newSess![0].id;
+    }
+
+    await supabase.from("messages").insert({
+      chat_session_id: sessionId,
+      role: "user",
+      content: message,
+    });
+
+    trackKeywords(message).catch(() => {});
+
     const state = detectState(message);
+
+    try {
+      await supabase.from("activity_log").insert({
+        user_email: user.email || "",
+        question: message,
+        state_detected: state,
+        event_type: "question",
+      });
+    } catch { /* non-critical */ }
 
     const contextParts: string[] = [];
 
     if (state) {
-      try {
-        const { data: laws } = await supabase
-          .from("state_laws")
-          .select("title, content")
-          .eq("state", state)
-          .order("id");
-        if (laws?.length) {
-          contextParts.push(
-            `=== STATE LAWS FOR ${US_STATES[state] || state} ===`
-          );
-          for (const law of laws) {
-            contextParts.push(`--- ${law.title} ---\n${law.content}`);
-          }
+      const { data: laws } = await supabase
+        .from("state_laws")
+        .select("title, content")
+        .eq("state", state)
+        .order("id");
+      if (laws?.length) {
+        contextParts.push(`=== STATE LAWS FOR ${US_STATES[state] || state} ===`);
+        for (const law of laws) {
+          contextParts.push(`--- ${law.title} ---\n${law.content}`);
         }
-      } catch {
-        // Supabase fetch failed — continue without context
       }
     } else {
-      try {
-        const { data: nwLaws } = await supabase
-          .from("state_laws")
-          .select("title, content")
-          .eq("state", "NW")
-          .order("id");
-        if (nwLaws?.length) {
-          contextParts.push("=== NATIONWIDE / GENERAL LAWS ===");
-          for (const law of nwLaws) {
-            contextParts.push(`--- ${law.title} ---\n${law.content}`);
-          }
+      const { data: nwLaws } = await supabase
+        .from("state_laws")
+        .select("title, content")
+        .eq("state", "NW")
+        .order("id");
+      if (nwLaws?.length) {
+        contextParts.push("=== NATIONWIDE / GENERAL LAWS ===");
+        for (const law of nwLaws) {
+          contextParts.push(`--- ${law.title} ---\n${law.content}`);
         }
-      } catch {
-        // continue without context
       }
     }
 
@@ -78,102 +116,135 @@ export async function POST(request: NextRequest) {
         .order("score", { ascending: false })
         .limit(10);
 
-      if (blogPosts?.length) {
-        const qLower = message.toLowerCase();
-        const words = new Set(qLower.split(/\s+/).filter((w) => w.length > 3));
-        const matched: typeof blogPosts = [];
-        for (const bp of blogPosts) {
-          const titleLower = (bp.title || "").toLowerCase();
-          const bodyLower = (bp.body || "").toLowerCase();
-          for (const w of words) {
-            if (titleLower.includes(w) || bodyLower.includes(w)) {
-              matched.push(bp);
-              break;
-            }
+      const qLower = message.toLowerCase();
+      const words = new Set(qLower.split(/\s+/).filter((w: string) => w.length > 3));
+      const matched: typeof blogPosts = [];
+      for (const bp of blogPosts || []) {
+        const tl = (bp.title || "").toLowerCase();
+        const bl = (bp.body || "").toLowerCase();
+        for (const w of words) {
+          if (tl.includes(w) || bl.includes(w)) {
+            matched.push(bp);
+            break;
           }
-          if (matched.length >= 3) break;
         }
-        if (matched.length) {
-          contextParts.push(
-            "=== RELATED BLOG CONTENT (supplemental) ==="
-          );
-          for (const bp of matched) {
-            contextParts.push(
-              `--- ${bp.title} ---\n${(bp.body || "").slice(0, 500)}`
-            );
-          }
+        if (matched.length >= 3) break;
+      }
+
+      if (matched.length) {
+        contextParts.push("=== RELATED BLOG CONTENT (supplemental) ===");
+        for (const bp of matched) {
+          contextParts.push(`--- ${bp.title} ---\n${(bp.body || "").slice(0, 500)}`);
         }
       }
-    } catch {
-      // continue without blog context
-    }
+    } catch { /* non-critical */ }
+
+    const { data: historyData } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("chat_session_id", sessionId)
+      .order("id");
 
     let systemPrompt = SYSTEM_PROMPT_BASE;
     if (contextParts.length) {
-      systemPrompt +=
-        "\n\nREFERENCE DATA (use this to answer questions):\n" +
-        contextParts.join("\n\n");
+      systemPrompt += "\n\nREFERENCE DATA (use this to answer questions):\n" + contextParts.join("\n\n");
     }
 
-    const oaiMessages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-    ];
+    const llmMessages = (historyData || []).map((m: { role: string; content: string }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
 
-    if (history?.length) {
-      for (const msg of history) {
-        oaiMessages.push({ role: msg.role, content: msg.content });
-      }
-    }
-
-    oaiMessages.push({ role: "user", content: message });
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: oaiMessages,
-      max_tokens: 2000,
-    });
-
-    const aiResponse =
-      completion.choices[0]?.message?.content ||
-      "I'm sorry, I couldn't generate a response. Please try again.";
-
-    let directoryResults: {
-      company_name: string;
-      website_url: string;
-      notes: string;
-      logo_url: string;
-    }[] = [];
-
+    let directoryResults: Record<string, string>[] = [];
     if (state) {
       try {
-        const { data: companies } = await supabase
+        const { data: notes } = await supabase
           .from("company_notes")
           .select("company_name, website_url, notes, logo_url")
           .eq("state", state)
           .order("id");
-        if (companies?.length) {
-          directoryResults = companies.map((n) => ({
-            company_name: n.company_name || "",
-            website_url: n.website_url || "",
-            notes: n.notes || "",
-            logo_url: n.logo_url || "",
-          }));
-        }
-      } catch {
-        // continue without directory
-      }
+        directoryResults = (notes || []).map((n) => ({
+          company_name: n.company_name || "",
+          website_url: n.website_url || "",
+          notes: n.notes || "",
+          logo_url: n.logo_url || "",
+        }));
+      } catch { /* non-critical */ }
     }
 
-    return NextResponse.json({
-      response: aiResponse,
-      directory_results: directoryResults,
-      featured_companies: [],
-      state_detected: state,
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: string, data: unknown) => {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+
+        send("meta", {
+          chat_session_id: sessionId,
+          directory_results: directoryResults,
+          featured_companies: [],
+          state_detected: state,
+        });
+
+        let fullResponse = "";
+
+        try {
+          const tokenStream = chatCompletionStream({
+            system: systemPrompt,
+            messages: llmMessages,
+            maxTokens: 2000,
+          });
+
+          for await (const token of tokenStream) {
+            fullResponse += token;
+            send("token", { text: token });
+          }
+        } catch (err) {
+          console.error("AI chat stream error:", err);
+          if (!fullResponse) {
+            fullResponse = "I'm sorry, I couldn't generate a response. Please try again.";
+            send("token", { text: fullResponse });
+          }
+        }
+
+        send("done", {});
+
+        await supabase.from("messages").insert({
+          chat_session_id: sessionId,
+          role: "assistant",
+          content: fullResponse,
+        });
+
+        try {
+          const { count } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .eq("chat_session_id", sessionId);
+          if ((count || 0) <= 2) {
+            await supabase
+              .from("chat_sessions")
+              .update({ title: message.slice(0, 50) })
+              .eq("id", sessionId);
+          }
+        } catch { /* non-critical */ }
+
+        if (!["admin", "owner"].includes(user.role)) {
+          recordRateLimit(uid).catch(() => {});
+        }
+
+        controller.close();
+      },
     });
-  } catch (err: unknown) {
-    console.error("Chat API error:", err);
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

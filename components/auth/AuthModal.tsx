@@ -28,7 +28,16 @@ export default function AuthModal({ open, onClose, initialMode = "register", onS
       if (mode === "register") {
         await register(email.trim(), password);
       } else {
-        await login(email.trim(), password);
+        try {
+          await login(email.trim(), password);
+        } catch (loginErr) {
+          const status = (loginErr as { status?: number }).status;
+          if (status === 401) {
+            await register(email.trim(), password);
+          } else {
+            throw loginErr;
+          }
+        }
       }
       setEmail("");
       setPassword("");

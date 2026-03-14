@@ -1,8 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api, getToken, setToken } from "@/lib/api";
-import { TOKEN_KEY } from "@/lib/constants";
+import { api, getToken, setToken, getRefreshToken, setRefreshToken } from "@/lib/api";
 
 export interface User {
   id: number;
@@ -34,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const checkAuth = useCallback(async () => {
-    const t = getToken();
+    let t = getToken();
     if (!t) {
       setUser(null);
       setTokenState(null);
@@ -46,8 +45,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const d = await api<{ user: User }>("/api/me");
       setUser(d.user);
     } catch {
+      const rt = getRefreshToken();
+      if (rt) {
+        try {
+          const res = await fetch("/api/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: rt }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            t = data.token;
+            setToken(t);
+            setTokenState(t);
+            if (data.refresh_token) setRefreshToken(data.refresh_token);
+            const d = await api<{ user: User }>("/api/me");
+            setUser(d.user);
+            setLoading(false);
+            return;
+          }
+        } catch { /* refresh failed */ }
+      }
       setUser(null);
       setToken(null);
+      setRefreshToken(null);
       setTokenState(null);
     }
     setLoading(false);
@@ -71,23 +92,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [checkAuth]);
 
   const login = async (email: string, password: string) => {
-    const d = await api<{ token: string; user: User }>("/api/login", {
+    const res = await fetch("/api/login", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    setToken(d.token);
-    setTokenState(d.token);
-    setUser(d.user);
+    const data = await res.json();
+    if (!res.ok) {
+      const err = new Error(data.detail || "Login failed") as Error & { status: number };
+      err.status = res.status;
+      throw err;
+    }
+    setToken(data.token);
+    setTokenState(data.token);
+    if (data.refresh_token) setRefreshToken(data.refresh_token);
+    setUser(data.user);
   };
 
   const register = async (email: string, password: string) => {
-    const d = await api<{ token: string; user: User }>("/api/register", {
+    const res = await fetch("/api/register", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    setToken(d.token);
-    setTokenState(d.token);
-    setUser(d.user);
+    const data = await res.json();
+    if (!res.ok) {
+      const err = new Error(data.detail || "Registration failed") as Error & { status: number };
+      err.status = res.status;
+      throw err;
+    }
+    setToken(data.token);
+    setTokenState(data.token);
+    if (data.refresh_token) setRefreshToken(data.refresh_token);
+    setUser(data.user);
   };
 
   const logout = async () => {
@@ -95,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api("/api/logout", { method: "POST" });
     } catch { /* ignore */ }
     setToken(null);
+    setRefreshToken(null);
     setTokenState(null);
     setUser(null);
   };

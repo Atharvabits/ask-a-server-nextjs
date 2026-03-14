@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -10,12 +10,12 @@ import ChatInput from "@/components/chat/ChatInput";
 import AuthModal from "@/components/auth/AuthModal";
 import Link from "next/link";
 import {
-  getSessions,
   getSession,
   createSession,
   addMessage,
   StoredMessage,
 } from "@/lib/chat-store";
+import { getToken } from "@/lib/api";
 
 export default function ChatPageWrapper() {
   return (
@@ -53,12 +53,21 @@ function ChatPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [authOpen, setAuthOpen] = useState(false);
   const [pendingMsg, setPendingMsg] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   const showWelcome = messages.length === 0;
 
   useEffect(() => {
     if (!loading && !user) {
+      setSessionId(null);
+      setMessages([]);
+      setRefreshKey((k) => k + 1);
       setAuthOpen(true);
+    } else if (user) {
+      setSessionId(null);
+      setMessages([]);
+      setRefreshKey((k) => k + 1);
     }
   }, [loading, user]);
 
@@ -75,6 +84,11 @@ function ChatPage() {
     async (msg: string) => {
       if (busy) return;
       setBusy(true);
+
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const thisRequestId = ++requestIdRef.current;
 
       const userMsg: ChatMessage = { role: "user", content: msg };
       setMessages((prev) => [...prev, userMsg]);
@@ -96,68 +110,144 @@ function ChatPage() {
       }));
 
       try {
+        const token = getToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          headers["X-Session-Token"] = token;
+        }
+
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg, history }),
+          headers,
+          body: JSON.stringify({ message: msg, chat_session_id: currentSessionId, history }),
+          signal: controller.signal,
+          credentials: "include",
         });
+
+        if (thisRequestId !== requestIdRef.current) return;
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "Request failed");
+          throw new Error(err.error || err.detail || "Request failed");
         }
-
-        const data = await res.json();
 
         setIsTyping(false);
 
-        const assistantMsg: ChatMessage = {
-          role: "assistant",
-          content: data.response,
-          directory_results: data.directory_results?.map(
-            (r: { company_name: string; website_url: string; notes: string; logo_url: string }) => ({
-              name: r.company_name,
-              url: r.website_url,
-              city: "",
-              state: data.state_detected || "",
-            })
-          ),
-          featured_companies: data.featured_companies?.map(
-            (f: { company_name: string; website_url: string; notes: string; logo_url: string }) => ({
-              name: f.company_name,
-              url: f.website_url,
-              state: data.state_detected || "",
-              notes: f.notes || "",
-              logo_url: f.logo_url || "",
-            })
-          ),
-        };
+        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullText = "";
+        let meta: {
+          chat_session_id?: string;
+          directory_results?: { company_name: string; website_url: string; notes: string; logo_url: string }[];
+          featured_companies?: { company_name: string; website_url: string; notes: string; logo_url: string }[];
+          state_detected?: string | null;
+        } = {};
 
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (thisRequestId !== requestIdRef.current) {
+            reader.cancel();
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          let eventType = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              const payload = line.slice(6);
+              try {
+                const data = JSON.parse(payload);
+                if (eventType === "meta") {
+                  meta = data;
+                  if (data.chat_session_id) {
+                    setSessionId(data.chat_session_id);
+                  }
+                } else if (eventType === "token") {
+                  fullText += data.text;
+                  const snapshot = fullText;
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === "assistant") {
+                      updated[updated.length - 1] = { ...last, content: snapshot };
+                    }
+                    return updated;
+                  });
+                } else if (eventType === "done") {
+                  const dirResults = meta.directory_results?.map((r) => ({
+                    name: r.company_name,
+                    url: r.website_url,
+                    city: "",
+                    state: meta.state_detected || "",
+                  }));
+                  const featuredCos = meta.featured_companies?.map((f) => ({
+                    name: f.company_name,
+                    url: f.website_url,
+                    state: meta.state_detected || "",
+                    notes: f.notes || "",
+                    logo_url: f.logo_url || "",
+                  }));
+
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === "assistant") {
+                      updated[updated.length - 1] = {
+                        ...last,
+                        content: fullText,
+                        directory_results: dirResults,
+                        featured_companies: featuredCos,
+                      };
+                    }
+                    return updated;
+                  });
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
+        }
+
+        const sid = meta.chat_session_id || currentSessionId;
         const storedAssistant: StoredMessage = {
           role: "assistant",
-          content: data.response,
-          directory_results: data.directory_results,
-          featured_companies: data.featured_companies,
+          content: fullText,
+          directory_results: meta.directory_results,
+          featured_companies: meta.featured_companies,
         };
-        addMessage(currentSessionId, storedAssistant);
+        addMessage(sid, storedAssistant);
         setRefreshKey((k) => k + 1);
       } catch (err) {
+        if (thisRequestId !== requestIdRef.current) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setIsTyping(false);
         if (err instanceof Error && err.message === "sign_in_required") {
           setMessages((prev) => prev.slice(0, -1));
           setAuthOpen(true);
           setPendingMsg(msg);
         } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content:
-                "Something went wrong. Please try again.",
-            },
-          ]);
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === "assistant" && !last.content) {
+              updated[updated.length - 1] = {
+                ...last,
+                content: "Something went wrong. Please try again.",
+              };
+            } else {
+              updated.push({ role: "assistant", content: "Something went wrong. Please try again." });
+            }
+            return updated;
+          });
         }
       }
       setBusy(false);
@@ -187,8 +277,12 @@ function ChatPage() {
   };
 
   const newChat = () => {
+    if (abortRef.current) abortRef.current.abort();
+    requestIdRef.current++;
     setSessionId(null);
     setMessages([]);
+    setIsTyping(false);
+    setBusy(false);
     setSidebarOpen(false);
   };
 

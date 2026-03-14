@@ -1,9 +1,8 @@
 import { TOKEN_KEY } from "./constants";
 
+const REFRESH_KEY = "askaserver_refresh_token";
+
 function getApiBase(): string {
-  if (typeof window === "undefined") return "";
-  const h = window.location.hostname;
-  if (h === "127.0.0.1" || h === "localhost") return "http://127.0.0.1:8000";
   return "";
 }
 
@@ -12,10 +11,21 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_KEY);
+}
+
 export function setToken(t: string | null) {
   if (typeof window === "undefined") return;
   if (t) localStorage.setItem(TOKEN_KEY, t);
   else localStorage.removeItem(TOKEN_KEY);
+}
+
+export function setRefreshToken(t: string | null) {
+  if (typeof window === "undefined") return;
+  if (t) localStorage.setItem(REFRESH_KEY, t);
+  else localStorage.removeItem(REFRESH_KEY);
 }
 
 export class ApiError extends Error {

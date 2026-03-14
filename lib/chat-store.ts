@@ -23,12 +23,25 @@ export interface ChatSession {
   created_at: string;
 }
 
-const STORAGE_KEY = "askaserver_chat_sessions";
+const STORAGE_PREFIX = "askaserver_chat_sessions";
+
+function getStorageKey(): string {
+  if (typeof window === "undefined") return STORAGE_PREFIX;
+  const token = localStorage.getItem("askaserver_token");
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const uid = payload.sub || payload.user_id || payload.email || "";
+      if (uid) return `${STORAGE_PREFIX}_${uid}`;
+    } catch { /* fall through */ }
+  }
+  return STORAGE_PREFIX;
+}
 
 function read(): ChatSession[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -37,7 +50,7 @@ function read(): ChatSession[] {
 
 function write(sessions: ChatSession[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  localStorage.setItem(getStorageKey(), JSON.stringify(sessions));
 }
 
 export function getSessions(): ChatSession[] {

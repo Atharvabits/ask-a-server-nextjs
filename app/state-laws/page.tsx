@@ -47,23 +47,22 @@ export default function StateLawsPage() {
 
   const loadStaticData = async () => {
     try {
-      const script = document.createElement("script");
-      script.src = "/state_laws_data.js";
-      script.onload = () => {
-        if ((window as unknown as Record<string, unknown>).STATE_LAWS_DATA) {
-          setStateData((window as unknown as Record<string, Record<string, StateData>>).STATE_LAWS_DATA);
-        }
-      };
-      document.head.appendChild(script);
-    } catch { /* ignore */ }
+      const res = await fetch("/api/public/state-laws");
+      if (!res.ok) return;
+      const dbLaws = (await res.json()) as { state: string; title: string; content: string; credit_company?: string; credit_user_id?: number; id?: number }[];
 
-    try {
-      const dbLaws = await fetch("/api/public/state-laws").then((r) => (r.ok ? r.json() : []));
+      const grouped: Record<string, StateData> = {};
       const counts: Record<string, number> = {};
-      (dbLaws as { state: string; title: string }[]).forEach((dl) => {
-        if (!counts[dl.state]) counts[dl.state] = 0;
-        counts[dl.state]++;
-      });
+      for (const dl of dbLaws) {
+        if (!dl.state) continue;
+        const abbr = dl.state.toUpperCase();
+        const name = US_STATES[abbr] || abbr;
+        if (!grouped[abbr]) grouped[abbr] = { abbr, name, laws: [] };
+        grouped[abbr].laws.push(dl);
+        counts[abbr] = (counts[abbr] || 0) + 1;
+      }
+
+      setStateData(grouped);
       setDbCounts(counts);
     } catch { /* ignore */ }
   };
@@ -77,12 +76,9 @@ export default function StateLawsPage() {
     let companies: CompanyNote[] = [];
 
     try {
-      const apiBase = typeof window !== "undefined" &&
-        (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-        ? "http://127.0.0.1:8000" : "";
       const [dbLaws, dbCompanies] = await Promise.all([
-        fetch(`${apiBase}/api/public/state-laws?state=${abbr}`).then((r) => (r.ok ? r.json() : [])),
-        fetch(`${apiBase}/api/public/company-notes?state=${abbr}`).then((r) => (r.ok ? r.json() : [])),
+        fetch(`/api/public/state-laws?state=${abbr}`).then((r) => (r.ok ? r.json() : [])),
+        fetch(`/api/public/company-notes?state=${abbr}`).then((r) => (r.ok ? r.json() : [])),
       ]);
       const existingTitles = new Set(s.laws.map((l) => l.title.toLowerCase().trim()));
       (dbLaws as StateLaw[]).forEach((dl) => {
